@@ -28,6 +28,18 @@ public final class FieldNormalizers {
             Map.entry("intensive care unit", "ICU"),
             Map.entry("maternity", "Maternity"));
 
+    /**
+     * A single ward is assumed to have at most this many beds; anything larger is
+     * treated as a bad value (e.g. a year pasted into the wrong column) rather than
+     * silently accepted.
+     */
+    public static final int MAX_REALISTIC_BEDS = 200;
+
+    public enum BedsIssue { NONE, PLACEHOLDER, NON_NUMERIC, NEGATIVE, UNREALISTIC }
+
+    public record BedsParse(Integer value, BedsIssue issue, String rawValue) {
+    }
+
     private FieldNormalizers() {
     }
 
@@ -90,5 +102,23 @@ public final class FieldNormalizers {
         String collapsed = collapseWhitespace(raw);
         String canonical = DEPARTMENT_SYNONYMS.get(collapsed.toLowerCase(Locale.ROOT));
         return canonical != null && !canonical.equals(titleCase(collapsed));
+    }
+
+    public static BedsParse parseBeds(String raw) {
+        String collapsed = collapseWhitespace(raw);
+        if (isPlaceholder(raw)) {
+            return new BedsParse(null, BedsIssue.PLACEHOLDER, collapsed);
+        }
+        if (!collapsed.matches("-?\\d+")) {
+            return new BedsParse(null, BedsIssue.NON_NUMERIC, collapsed);
+        }
+        long count = Long.parseLong(collapsed);
+        if (count < 0) {
+            return new BedsParse(null, BedsIssue.NEGATIVE, collapsed);
+        }
+        if (count > MAX_REALISTIC_BEDS) {
+            return new BedsParse(null, BedsIssue.UNREALISTIC, collapsed);
+        }
+        return new BedsParse((int) count, BedsIssue.NONE, collapsed);
     }
 }
