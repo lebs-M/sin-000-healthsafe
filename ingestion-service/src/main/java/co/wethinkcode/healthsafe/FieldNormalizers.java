@@ -1,5 +1,9 @@
 package co.wethinkcode.healthsafe;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +38,18 @@ public final class FieldNormalizers {
      * silently accepted.
      */
     public static final int MAX_REALISTIC_BEDS = 200;
+
+    /**
+     * Date formats accepted by {@link #normalizeDate(String)}, most-specific first.
+     * Ambiguity policy: slash-separated dates are US month-first, dash-separated
+     * dates are day-first, ISO dates are year-first — matching the three styles
+     * observed in legacy exports. Anything else is flagged rather than guessed.
+     */
+    private static final DateTimeFormatter[] DATE_FORMATS = {
+            DateTimeFormatter.ofPattern("uuuu-M-d").withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("M/d/uuuu").withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("d-M-uuuu").withResolverStyle(ResolverStyle.STRICT),
+    };
 
     public enum BedsIssue { NONE, PLACEHOLDER, NON_NUMERIC, NEGATIVE, UNREALISTIC }
 
@@ -120,5 +136,33 @@ public final class FieldNormalizers {
             return new BedsParse(null, BedsIssue.UNREALISTIC, collapsed);
         }
         return new BedsParse((int) count, BedsIssue.NONE, collapsed);
+    }
+
+    /** Normalises any accepted legacy date format to ISO {@code yyyy-MM-dd}; invalid dates → {@code null}. */
+    public static String normalizeDate(String raw) {
+        if (isPlaceholder(raw)) {
+            return null;
+        }
+        String collapsed = collapseWhitespace(raw);
+        for (DateTimeFormatter format : DATE_FORMATS) {
+            try {
+                return LocalDate.parse(collapsed, format).toString();
+            } catch (DateTimeParseException ignored) {
+                // try the next accepted format
+            }
+        }
+        return null;
+    }
+
+    /** {@code Y/yes/1/TRUE} → true, {@code N/no/0/FALSE} → false, anything else → {@code null}. */
+    public static Boolean normalizeBoolean(String raw) {
+        if (isPlaceholder(raw)) {
+            return null;
+        }
+        return switch (collapseWhitespace(raw).toLowerCase(Locale.ROOT)) {
+            case "y", "yes", "1", "true", "t" -> Boolean.TRUE;
+            case "n", "no", "0", "false", "f" -> Boolean.FALSE;
+            default -> null;
+        };
     }
 }
