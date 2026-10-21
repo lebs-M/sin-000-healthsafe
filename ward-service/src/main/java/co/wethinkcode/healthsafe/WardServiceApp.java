@@ -10,7 +10,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Provides lists of wards and departments, sourced from the ingestion-service.
+ * Provides lists of wards and departments, sourced from the ingestion-service,
+ * and exposes each ward's on-call schedule from the latest
+ * {@code staffing-events-topic} event (stage 3).
  */
 public class WardServiceApp {
 
@@ -20,6 +22,8 @@ public class WardServiceApp {
     public static void main(String[] args) {
         WardRegistry registry = new WardRegistry(new IngestionClient());
         registry.startBackgroundLoader();
+        StaffingEventSubscriber staffingEvents = new StaffingEventSubscriber();
+        staffingEvents.start();
 
         Javalin app = Javalin.create().start(PORT);
 
@@ -49,6 +53,23 @@ public class WardServiceApp {
                 return;
             }
             ctx.json(ward.get());
+        });
+
+        app.get("/wards/{id}/staffing", ctx -> {
+            if (!ready(registry, ctx)) {
+                return;
+            }
+            String wardId = ctx.pathParam("id");
+            if (registry.find(wardId).isEmpty()) {
+                ctx.status(404).json(Map.of("error", "Unknown ward: " + wardId));
+                return;
+            }
+            staffingEvents.latestFor(wardId).ifPresentOrElse(
+                    ctx::json,
+                    () -> ctx.status(404).json(Map.of(
+                            "error", "no staffing update received yet for " + wardId
+                                    + " — publish one via staffing-service POST /staffing/"
+                                    + wardId + "/roster")));
         });
 
         app.post("/wards/reload", ctx -> {
