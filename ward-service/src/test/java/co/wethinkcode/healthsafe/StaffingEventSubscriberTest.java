@@ -86,6 +86,7 @@ class StaffingEventSubscriberTest {
     void theWardCatalogueLooksUpWardsCaseInsensitively() {
         startSubscriber();
         publish(roster("W-05", 5));
+        assertEquals(5, awaitEvent("W-05").alertLevel());
 
         assertTrue(subscriber.latestFor("w-05").isPresent());
         assertTrue(subscriber.latestFor("  W-05 ").isPresent());
@@ -118,11 +119,12 @@ class StaffingEventSubscriberTest {
         assertEquals(4, event.alertLevel());
     }
 
-    private void startSubscriber() {
+    private StaffingEventSubscriber startSubscriber() {
         subscriber = new StaffingEventSubscriber(BROKER_URL, clientId, "ward-service-staffing");
         subscriber.start();
         assertTrue(subscriber.awaitConnected(CONNECT_TIMEOUT),
                 "subscriber should connect to " + BROKER_URL);
+        return subscriber;
     }
 
     private StaffingEvent awaitEvent(String wardId) {
