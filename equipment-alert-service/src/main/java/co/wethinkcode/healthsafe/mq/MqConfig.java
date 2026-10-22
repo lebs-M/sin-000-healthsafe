@@ -7,9 +7,16 @@ package co.wethinkcode.healthsafe.mq;
  */
 public final class MqConfig {
 
-    public static final String BROKER_URL = "tcp://localhost:61616";
-    public static final String QUEUE = "equipment-failure-queue";
+    public static final String BROKER_URL =
+            env("MQ_BROKER_URL", "tcp://localhost:61616");
+    public static final String QUEUE =
+            env("MQ_QUEUE", "equipment-failure-queue");
 
     private MqConfig() {
+    }
+
+    private static String env(String key, String fallback) {
+        String value = System.getenv(key);
+        return value == null || value.isBlank() ? fallback : value;
     }
 }
