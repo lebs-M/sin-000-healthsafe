@@ -6,13 +6,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Provides lists of wards and departments, sourced from the ingestion-service,
- * and exposes each ward's on-call schedule from the latest
- * {@code staffing-events-topic} event (stage 3).
+ * exposes each ward's on-call schedule from the latest
+ * {@code staffing-events-topic} event (stage 3), and publishes detected
+ * equipment failures to the {@code equipment-failure-queue} (stage 4).
  */
 public class WardServiceApp {
 
@@ -24,10 +26,16 @@ public class WardServiceApp {
         registry.startBackgroundLoader();
         StaffingEventSubscriber staffingEvents = new StaffingEventSubscriber();
         staffingEvents.start();
+        EquipmentFailurePublisher equipmentFailures = new EquipmentFailurePublisher();
 
         Javalin app = Javalin.create().start(PORT);
 
         app.get("/health", ctx -> ctx.result("OK"));
+
+        app.exception(IllegalArgumentException.class,
+                (e, ctx) -> ctx.status(400).json(Map.of("error", e.getMessage())));
+        app.exception(BrokerUnavailableException.class,
+                (e, ctx) -> ctx.status(503).json(Map.of("error", e.getMessage())));
 
         app.get("/wards", ctx -> {
             if (!ready(registry, ctx)) {
@@ -70,6 +78,27 @@ public class WardServiceApp {
                             "error", "no staffing update received yet for " + wardId
                                     + " — publish one via staffing-service POST /staffing/"
                                     + wardId + "/roster")));
+        });
+
+        app.post("/wards/{id}/equipment-failure", ctx -> {
+            if (!ready(registry, ctx)) {
+                return;
+            }
+            Optional<Ward> ward = registry.find(ctx.pathParam("id"));
+            if (ward.isEmpty()) {
+                ctx.status(404).json(Map.of("error", "Unknown ward: " + ctx.pathParam("id")));
+                return;
+            }
+            EquipmentFailureRequest request = EquipmentFailureRequest.parse(ctx.body());
+            EquipmentFailureAlert alert = new EquipmentFailureAlert(
+                    ward.get().wardId(),
+                    ward.get().wing(),
+                    request.equipment(),
+                    request.detail(),
+                    Instant.now().toString());
+            equipmentFailures.publish(alert);
+            log.warn("equipment failure on ward {}: {}", alert.wardId(), alert.equipment());
+            ctx.status(202).json(alert);
         });
 
         app.post("/wards/reload", ctx -> {
