@@ -21,6 +21,15 @@ staffing-service/
 ├── pom.xml
 └── src/main/java/co/wethinkcode/healthsafe/
     ├── StaffingServiceApp.java
+    ├── OnCallSchedule.java
+    ├── ScheduleCalculator.java
+    ├── RosterRequest.java
+    ├── WardServiceClient.java
+    ├── AlertLevelClient.java
+    ├── StaffingEvent.java
+    ├── StaffingPublisher.java
+    ├── UnknownWardException.java
+    ├── DownstreamUnavailableException.java
     └── mq/
         └── MqConfig.java
 ```
@@ -37,15 +46,27 @@ mvn package
 java -jar target/staffing-service.jar
 ```
 
-Listens on port `7033`.
+Listens on port `7033` (override with `PORT`; downstreams are `WARD_URL` and
+`ALERT_LEVEL_URL`). Serves:
+
+- `GET /staffing/{wardId}` — compute the on-call schedule for the ward's current
+  Emergency Status (`404` unknown ward, `503` downstream unavailable)
+- `POST /staffing/{wardId}/roster` — recompute and publish a `ROSTER_UPDATED`
+  event to `staffing-events-topic` (`201`)
+- `GET /staffing` — latest published roster events
 
 ## Test
 
-No automated tests yet. Manually verify it's up:
+```
+mvn test
+```
+
+JUnit 5 tests cover on-call sizing (`ScheduleCalculatorTest`): headcount by
+Emergency Status and the day/night shift split; plus roster-request validation
+(`RosterRequestTest`) and the published event shape (`StaffingEventTest`).
+
+Up check:
 
 ```
 curl http://localhost:7033/health   # -> OK
 ```
-
-To add real tests, add JUnit 5 + the Surefire plugin to `pom.xml`, put tests under
-`src/test/java/co/wethinkcode/healthsafe/`, and run `mvn test`.

@@ -31,15 +31,23 @@ mvn package
 java -jar target/alert-level-service.jar
 ```
 
-Listens on port `7032`.
+Listens on port `7032` (override with `PORT`). Serves:
+
+- `GET /alert-level` — current status, e.g. `{"level":5,"updatedAt":"..."}`
+- `PUT /alert-level` / `POST /alert-level` — set the status from
+  `{"level":0-8}`; anything outside 0–8 is rejected with `400`
 
 ## Test
 
-No automated tests yet. Manually verify it's up:
+```
+mvn test
+```
+
+JUnit 5 tests cover level parsing and the 0–8 range validation
+(`AlertLevelServiceAppTest`).
+
+Up check:
 
 ```
 curl http://localhost:7032/health   # -> OK
 ```
-
-To add real tests, add JUnit 5 + the Surefire plugin to `pom.xml`, put tests under
-`src/test/java/co/wethinkcode/healthsafe/`, and run `mvn test`.

@@ -80,16 +80,27 @@ mvn package
 java -jar target/ingestion-service.jar
 ```
 
-Listens on port `7030`. Currently just exposes `/health` — the actual CSV
-parsing/cleaning logic is a TODO.
+Listens on port `7030` (override with `PORT`). Cleans `wards-outdated.csv` at
+startup and serves the result:
+
+- `GET /wards` — the cleaned ward records (JSON array) for `ward-service`
+- `GET /wards/{id}` — one ward by id (case-insensitive), `404` if unknown
+- `GET /wards/report` — the cleaning summary (`totalDataRows`, `cleanedRecords`,
+  `duplicatesMerged`, `rejectedRows`)
+
+See the root README's *Assumptions & trade-offs* for the cleaning rules.
 
 ## Test
 
-No automated tests yet. Manually verify it's up:
+```
+mvn test
+```
+
+JUnit 5 tests cover field normalisation (`FieldNormalizersTest`) and the
+cleaning/duplicate-merge pass (`WardCleanerTest`).
+
+Up check:
 
 ```
 curl http://localhost:7030/health   # -> OK
 ```
-
-To add real tests, add JUnit 5 + the Surefire plugin to `pom.xml`, put tests under
-`src/test/java/co/wethinkcode/healthsafe/`, and run `mvn test`.

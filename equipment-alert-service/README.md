@@ -32,6 +32,9 @@ equipment-alert-service/
 ├── pom.xml
 └── src/main/java/co/wethinkcode/healthsafe/
     ├── EquipmentAlertServiceApp.java
+    ├── EquipmentAlertConsumer.java
+    ├── AlertProcessor.java
+    ├── EquipmentFailureAlert.java
     └── mq/
         └── MqConfig.java
 ```
@@ -48,15 +51,31 @@ mvn package
 java -jar target/equipment-alert-service.jar
 ```
 
-Listens on port `7034`.
+Listens on port `7034` (override with `PORT`). Connects to the broker on a
+background thread that retries, so it starts cleanly even if the broker is not up
+yet, and reconnects if the broker goes away. Serves:
+
+- `GET /health` — liveness
+- `GET /alerts` — the equipment-failure alerts consumed so far
 
 ## Test
 
-No automated tests yet. Manually verify it's up:
-
 ```
-curl http://localhost:7034/health   # -> OK
+mvn test
 ```
 
-To add real tests, add JUnit 5 + the Surefire plugin to `pom.xml`, put tests under
-`src/test/java/co/wethinkcode/healthsafe/`, and run `mvn test`.
+JUnit 5 tests cover alert parsing and the process-then-acknowledge decision
+(`AlertProcessorTest`): a malformed payload reports "not handled", so the
+consumer leaves it unacknowledged and the broker redelivers it.
+
+Manual end to end: with the broker running, trigger a failure and check it is
+consumed:
+
+```
+# ward-service publishes to equipment-failure-queue when it detects a failure
+curl -X POST http://localhost:7031/wards/W-05/equipment-failure \
+  -H 'Content-Type: application/json' \
+  -d '{"equipment":"Ventilator-3","detail":"not powering on"}'
+
+curl http://localhost:7034/alerts   # -> the alert appears once consumed
+```

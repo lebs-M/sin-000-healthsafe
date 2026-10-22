@@ -25,13 +25,21 @@ cleanup through synchronous REST calls to asynchronous MQ decoupling and alertin
 | StaffingServiceApp | [`staffing-service/`](staffing-service) | 7033 | Provides on-call schedules for doctors based on ward and status. |
 | EquipmentAlertServiceApp | [`equipment-alert-service/`](equipment-alert-service) | 7034 | uses a Queue to guarantee delivery of critical medical equipment failure alerts. |
 
-Plus [`common/`](common) (no port) — the shared ActiveMQ broker and MQ config notes
-for `staffing-events-topic`: Staffing updates are broadcast as Events via the broker to decouple the frontend from the Staffing Service.
+Plus [`common/`](common) (no port) — the shared ActiveMQ broker, with notes on both
+channels: staffing updates are broadcast on `staffing-events-topic` to decouple the
+frontend from the Staffing Service, and equipment-failure alerts go through
+`equipment-failure-queue` for guaranteed delivery.
 
-**Status:** scaffold only — build files, Javalin bootstrap, and TODOs are in place; no
-business logic has been implemented yet.
+**Status:** complete — all four stages are implemented and verified end to end
+against a live ActiveMQ broker: cleaning/ingestion, the three synchronous REST
+services, topic-based decoupling of staffing updates, and queue-based
+equipment-failure alerting. See [Assumptions & trade-offs](#assumptions--trade-offs).
 
 ## Your task
+
+> Kept for reference: this is the original brief. It is now complete — the
+> TODOs mentioned below are implemented, and each service's `## Test` section
+> describes the tests that exist rather than how to add them.
 
 Each stage below builds on the last — do them in order. Every service already builds
 and runs (`/health` returns `OK`); your job is to fill in the `TODO`s.
@@ -75,6 +83,48 @@ consume them.
 | `staffing-service` | `ward-service` (topic, stage 3) | publish to `staffing-events-topic` | Broadcast a schedule/status change |
 | `ward-service` (topic, stage 3) | — | subscribe to `staffing-events-topic` | React to staffing updates without polling |
 | `ward-service` (queue, stage 4) | `equipment-alert-service` | publish to `equipment-failure-queue` | Guarantee delivery of an equipment failure alert |
+
+## Assumptions & trade-offs
+
+Where the brief left room for judgment, these are the choices made and why:
+
+- **Duplicate wards** (`W-05` vs `w-05` with differing fields) are *merged*
+  first-valid-wins rather than the later row silently overwriting the earlier
+  one. The merged record's `notes` list records `merged duplicate row N` and
+  `sourceRows` lists every contributing CSV row, so a reviewer can always trace
+  what was combined. Nothing is discarded without a note.
+- **Unrealistically high bed counts** (`> 200`) are treated as suspected data
+  errors: the value is kept but flagged in `notes` for human follow-up, rather
+  than rejected outright or trusted blindly.
+- **Ambiguous dates**: slash-separated dates (`03/04/2024`) are read
+  month-first, dash-separated dates (`2024-04-03`) day-first — the convention
+  observed in the source export. Unparseable dates are flagged, never fatal.
+- **Missing/placeholder values** (`N/A`, `TBD`, blank, `-`, `NaN`) all collapse
+  to a single `null` representation so downstream code has one thing to test.
+- **A malformed row never crashes the parse**: bad numeric values (`five`,
+  `full`, negatives) degrade to `null` plus a note. The ingestion report always
+  returns (`totalDataRows`/`cleanedRecords`/`duplicatesMerged`/`rejectedRows`).
+- **Topic vs queue** is a deliberate contrast, not an accident:
+  `staffing-events-topic` is a *broadcast* — any number of interested services
+  (here `ward-service`) subscribe, and losing a missed message is acceptable
+  because a newer roster supersedes it. `equipment-failure-queue` is
+  *guaranteed, single-consumer, at-least-once* — an equipment failure must reach
+  the alerting consumer exactly once and must not be lost if that consumer is
+  briefly down. The producer sends `PERSISTENT` messages; the consumer uses
+  `CLIENT_ACKNOWLEDGE` and only acks after the alert is fully processed, so a
+  crash mid-processing leaves the message on the queue for redelivery.
+- **`ward-service` uses a durable topic subscription** (client id
+  `ward-service`), so staffing updates published while it is restarting are not
+  lost.
+- **A dropped broker connection is noticed, not waited out**: both background
+  MQ clients flag a lost connection from the JMS exception listener and tear the
+  session down so the retry loop reconnects. An async listener does not throw at
+  the thread parked in the consume loop, so without this the service would sit
+  on a dead connection indefinitely.
+- **Configuration is environment-overridable** — `PORT`, `INGESTION_URL`,
+  `WARD_URL`, `ALERT_LEVEL_URL`, `MQ_BROKER_URL`, `MQ_TOPIC`, `MQ_QUEUE` — so
+  the stack can run on non-default ports (useful when several copies share a
+  machine) and against a non-default broker.
 
 ## Project structure
 
@@ -147,14 +197,29 @@ cd equipment-alert-service && mvn package && java -jar target/equipment-alert-se
 
 ## Test
 
-No automated tests exist yet (this is a scaffold). Each running service exposes
-`/health`, so sanity-check manually:
+JUnit 5 tests cover the logic that is easiest to get subtly wrong and hardest to
+eyeball. Run a module's tests with `mvn test` (or `mvn package`, which runs them
+too).
+
+| Module | Tests | Covers |
+|---|---|---|
+| `ingestion-service` | 18 | CSV field normalisation, duplicate merging, malformed rows |
+| `ward-service` | 25 | ward registry, ingestion client, staffing cache + live topic round trip, equipment-failure body |
+| `alert-level-service` | 4 | Emergency Status 0–8 parsing/validation |
+| `staffing-service` | 12 | on-call sizing, roster request parsing, event shape |
+| `equipment-alert-service` | 4 | alert parsing and process-then-acknowledge |
+
+The `ward-service` topic test needs a broker (`common/docker-compose.yml`) and
+skips itself when none is reachable, so `mvn test` stays green without one.
+
+Every running service also exposes `/health`, so sanity-check manually:
 
 ```
 curl http://localhost:7030/health   # -> OK
 ```
 
-To add real tests to a module, add JUnit 5 and Surefire to its `pom.xml`:
+To add tests to a module that has none yet, add JUnit 5 and Surefire to its
+`pom.xml`:
 
 ```xml
 <dependency>
