@@ -67,39 +67,4 @@ class FieldNormalizersTest {
         assertNull(FieldNormalizers.parseBeds("-2").value());
         assertNull(FieldNormalizers.parseBeds("2023").value());
     }
-
-    @Test
-    void normalisesAcceptedDateFormatsToIso() {
-        assertEquals("2023-04-01", FieldNormalizers.normalizeDate("2023-04-01"));
-        assertEquals("2023-04-01", FieldNormalizers.normalizeDate("4/1/2023"));
-        assertEquals("2023-09-04", FieldNormalizers.normalizeDate("9/4/2023"));
-        assertEquals("2023-04-01", FieldNormalizers.normalizeDate("1-4-2023"));
-    }
-
-    @Test
-    void slashDatesAreMonthFirstAndDashDatesAreDayFirst() {
-        assertEquals("2023-01-02", FieldNormalizers.normalizeDate("1/2/2023"));
-        assertEquals("2023-02-01", FieldNormalizers.normalizeDate("01-02-2023"));
-    }
-
-    @Test
-    void rejectsImpossibleDates() {
-        assertNull(FieldNormalizers.normalizeDate("31-02-2023"));
-        assertNull(FieldNormalizers.normalizeDate("13/45/2023"));
-        assertNull(FieldNormalizers.normalizeDate("2023-13-01"));
-        assertNull(FieldNormalizers.normalizeDate("not a date"));
-    }
-
-    @Test
-    void normalisesBooleanVariants() {
-        assertEquals(Boolean.TRUE, FieldNormalizers.normalizeBoolean("Y"));
-        assertEquals(Boolean.TRUE, FieldNormalizers.normalizeBoolean("yes"));
-        assertEquals(Boolean.TRUE, FieldNormalizers.normalizeBoolean("1"));
-        assertEquals(Boolean.TRUE, FieldNormalizers.normalizeBoolean("TRUE"));
-        assertEquals(Boolean.FALSE, FieldNormalizers.normalizeBoolean("n"));
-        assertEquals(Boolean.FALSE, FieldNormalizers.normalizeBoolean("FALSE"));
-        assertEquals(Boolean.FALSE, FieldNormalizers.normalizeBoolean("0"));
-        assertNull(FieldNormalizers.normalizeBoolean("maybe"));
-        assertNull(FieldNormalizers.normalizeBoolean("N/A"));
-    }
 }

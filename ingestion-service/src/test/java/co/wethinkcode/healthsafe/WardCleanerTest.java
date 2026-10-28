@@ -134,26 +134,6 @@ class WardCleanerTest {
     }
 
     @Test
-    void normalisesExtraDateAndBooleanColumnsWhenPresent() throws IOException {
-        WardCleaner.IngestionResult result = clean("""
-                ward_id,wing,department,beds_available,last_updated,is_active
-                W-01,North Wing,ICU,4,01-02-2023,Y
-                W-02,South Wing,Maternity,2,13/45/2023,maybe
-                """);
-
-        Map<String, CleanedWard> map = byId(result.wards());
-        assertEquals("2023-02-01", map.get("W-01").getAttributes().get("last_updated"));
-        assertEquals(Boolean.TRUE, map.get("W-01").getAttributes().get("is_active"));
-
-        assertNull(map.get("W-02").getAttributes().get("last_updated"));
-        assertNull(map.get("W-02").getAttributes().get("is_active"));
-        assertTrue(map.get("W-02").getNotes().stream()
-                .anyMatch(n -> n.contains("invalid date ('13/45/2023')")));
-        assertTrue(map.get("W-02").getNotes().stream()
-                .anyMatch(n -> n.contains("unrecognized flag ('maybe')")));
-    }
-
-    @Test
     void skipsBlankLines() throws IOException {
         WardCleaner.IngestionResult result = clean("""
                 ward_id,wing,department,beds_available

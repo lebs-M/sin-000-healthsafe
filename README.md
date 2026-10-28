@@ -96,9 +96,6 @@ Where the brief left room for judgment, these are the choices made and why:
 - **Unrealistically high bed counts** (`> 200`) are treated as suspected data
   errors: the value is kept but flagged in `notes` for human follow-up, rather
   than rejected outright or trusted blindly.
-- **Ambiguous dates**: slash-separated dates (`03/04/2024`) are read
-  month-first, dash-separated dates (`2024-04-03`) day-first — the convention
-  observed in the source export. Unparseable dates are flagged, never fatal.
 - **Missing/placeholder values** (`N/A`, `TBD`, blank, `-`, `NaN`) all collapse
   to a single `null` representation so downstream code has one thing to test.
 - **A malformed row never crashes the parse**: bad numeric values (`five`,
@@ -203,11 +200,12 @@ too).
 
 | Module | Tests | Covers |
 |---|---|---|
-| `ingestion-service` | 18 | CSV field normalisation, duplicate merging, malformed rows |
+| `ingestion-service` | 13 | CSV field normalisation, duplicate merging, malformed rows |
 | `ward-service` | 25 | ward registry, ingestion client, staffing cache + live topic round trip, equipment-failure body |
 | `alert-level-service` | 4 | Emergency Status 0–8 parsing/validation |
 | `staffing-service` | 12 | on-call sizing, roster request parsing, event shape |
 | `equipment-alert-service` | 4 | alert parsing and process-then-acknowledge |
+| **Total** | **58** | |
 
 The `ward-service` topic test needs a broker (`common/docker-compose.yml`) and
 skips itself when none is reachable, so `mvn test` stays green without one.

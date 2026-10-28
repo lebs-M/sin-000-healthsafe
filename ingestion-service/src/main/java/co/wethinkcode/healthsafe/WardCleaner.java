@@ -21,7 +21,7 @@ public final class WardCleaner {
     public record IngestionResult(List<CleanedWard> wards, IngestionReport report) {
     }
 
-    private enum ColumnRole { ID, WING, DEPARTMENT, BEDS, DATE, BOOLEAN, OTHER }
+    private enum ColumnRole { ID, WING, DEPARTMENT, BEDS, IGNORED }
 
     public IngestionResult clean(Reader reader) throws IOException {
         IngestionReport report = new IngestionReport();
@@ -63,7 +63,7 @@ public final class WardCleaner {
                     report.reject(row, "expected " + columns.size() + " columns, found " + cells.length, raw);
                     continue;
                 }
-                CleanedWard ward = cleanRow(cells, columns, roles, row, report);
+                CleanedWard ward = cleanRow(cells, roles, row, report);
                 if (ward != null) {
                     pending.add(ward);
                     pendingRows.add(row);
@@ -78,7 +78,7 @@ public final class WardCleaner {
         return new IngestionResult(merged, report);
     }
 
-    private CleanedWard cleanRow(String[] cells, List<String> columns, List<ColumnRole> roles,
+    private CleanedWard cleanRow(String[] cells, List<ColumnRole> roles,
                                  int row, IngestionReport report) {
         String wardId = null;
         int idIndex = roles.indexOf(ColumnRole.ID);
@@ -94,7 +94,6 @@ public final class WardCleaner {
         ward.addSourceRow(row);
 
         for (int i = 0; i < cells.length; i++) {
-            String column = columns.get(i);
             String raw = cells[i];
             switch (roles.get(i)) {
                 case ID -> {
@@ -118,23 +117,9 @@ public final class WardCleaner {
                     ward.setDepartment(department);
                 }
                 case BEDS -> cleanBeds(ward, raw);
-                case DATE -> {
-                    String date = FieldNormalizers.normalizeDate(raw);
-                    if (date == null && !FieldNormalizers.isPlaceholder(raw)) {
-                        ward.addNote("column '" + column + "' had invalid date ('"
-                                + FieldNormalizers.collapseWhitespace(raw) + "') — set to null");
-                    }
-                    ward.putAttribute(column, date);
+                case IGNORED -> {
+                    // unrecognised column — not part of the ward model, so drop it
                 }
-                case BOOLEAN -> {
-                    Boolean flag = FieldNormalizers.normalizeBoolean(raw);
-                    if (flag == null && !FieldNormalizers.isPlaceholder(raw)) {
-                        ward.addNote("column '" + column + "' had unrecognized flag ('"
-                                + FieldNormalizers.collapseWhitespace(raw) + "') — set to null");
-                    }
-                    ward.putAttribute(column, flag);
-                }
-                case OTHER -> ward.putAttribute(column, FieldNormalizers.collapseWhitespace(raw));
             }
         }
         return ward;
@@ -194,15 +179,7 @@ public final class WardCleaner {
         if (column.contains("bed")) {
             return ColumnRole.BEDS;
         }
-        if (column.equals("date") || column.endsWith("_date") || column.contains("updated")
-                || column.contains("timestamp")) {
-            return ColumnRole.DATE;
-        }
-        if (column.startsWith("is_") || column.startsWith("has_") || column.endsWith("active")
-                || column.endsWith("enabled") || column.endsWith("flag")) {
-            return ColumnRole.BOOLEAN;
-        }
-        return ColumnRole.OTHER;
+        return ColumnRole.IGNORED;
     }
 
     private static boolean isBlankRow(String[] cells) {

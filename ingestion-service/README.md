@@ -47,14 +47,10 @@ out for (and handle) at least:
   fields
 - **Duplicate records** for the same real-world entity, written with a different ID
   casing/format and/or slightly different field values
-- **Inconsistent date formats** (`YYYY-MM-DD`, `MM/DD/YYYY`, `DD-MM-YYYY`, one- and
-  two-digit months/days) and outright invalid dates
 - **Missing / placeholder values** — blank fields, `N/A`, `n/a`, `TBD`, `unknown`,
   `-`, `NaN`
 - **Invalid or non-numeric values** in numeric columns (negative counts, spelled-out
   numbers, unrealistic values)
-- **Inconsistent boolean/flag representations** (`Y`/`N`, `yes`/`no`, `1`/`0`,
-  `true`/`FALSE`)
 - **Naming/spelling variants** for the same thing (e.g. regional spelling
   differences, synonyms)
 

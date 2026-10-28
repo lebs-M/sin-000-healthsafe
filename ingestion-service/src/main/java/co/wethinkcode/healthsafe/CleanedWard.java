@@ -1,9 +1,7 @@
 package co.wethinkcode.healthsafe;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * One cleaned ward record, plus the audit trail of everything the cleaner had
@@ -16,7 +14,6 @@ public class CleanedWard {
     private String department;
     private Integer bedsAvailable;
     private final List<String> notes = new ArrayList<>();
-    private final Map<String, Object> attributes = new LinkedHashMap<>();
     private final List<Integer> sourceRows = new ArrayList<>();
 
     public CleanedWard(String wardId) {
@@ -43,10 +40,6 @@ public class CleanedWard {
         return notes;
     }
 
-    public Map<String, Object> getAttributes() {
-        return attributes;
-    }
-
     public List<Integer> getSourceRows() {
         return sourceRows;
     }
@@ -65,10 +58,6 @@ public class CleanedWard {
 
     void addNote(String note) {
         notes.add(note);
-    }
-
-    void putAttribute(String column, Object value) {
-        attributes.put(column, value);
     }
 
     void addSourceRow(int row) {
@@ -107,6 +96,5 @@ public class CleanedWard {
         }
 
         other.notes.forEach(note -> notes.add("row " + otherRow + ": " + note));
-        other.attributes.forEach(attributes::putIfAbsent);
     }
 }
